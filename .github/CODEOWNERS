@@ -1,0 +1,47 @@
+# Global owners - these users/teams will be requested for review on all PRs
+* @opencsms/core-team
+
+# Architecture and core components
+/modules/domain/ @opencsms/architects
+/modules/core/ @opencsms/architects
+ARCHITECTURE.md @opencsms/architects
+DATA-MODELS.md @opencsms/architects
+
+# OCPP protocol implementation
+/modules/ocpp/ @opencsms/ocpp-experts
+/src/main/java/**/ocpp/ @opencsms/ocpp-experts
+
+# OCPI protocol implementation  
+/modules/ocpi/ @opencsms/ocpi-experts
+/src/main/java/**/ocpi/ @opencsms/ocpi-experts
+
+# Security-related code
+/modules/security/ @opencsms/security-team
+SECURITY-ARCHITECTURE.md @opencsms/security-team
+/src/main/java/**/security/ @opencsms/security-team
+
+# Web and API layers
+/modules/web/ @opencsms/frontend-team
+/src/main/java/**/web/ @opencsms/frontend-team
+/src/main/java/**/api/ @opencsms/api-team
+API-SPECIFICATIONS.md @opencsms/api-team
+
+# Infrastructure and deployment
+/docker/ @opencsms/devops-team
+/.github/ @opencsms/devops-team
+/config/ @opencsms/devops-team
+build.gradle @opencsms/devops-team
+settings.gradle @opencsms/devops-team
+
+# Database and migrations
+/sql/ @opencsms/database-team
+/src/main/resources/db/ @opencsms/database-team
+
+# Documentation
+*.md @opencsms/documentation-team
+/docs/ @opencsms/documentation-team
+
+# Configuration files
+application*.yml @opencsms/config-team
+application*.yaml @opencsms/config-team
+application*.properties @opencsms/config-team

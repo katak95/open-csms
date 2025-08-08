@@ -1,0 +1,284 @@
+# Open-CSMS Production Docker Compose
+# Complete production stack with all services
+#
+# Usage:
+#   docker-compose -f docker/docker-compose.yml up -d
+#
+# Prerequisites:
+#   - Set environment variables (see .env.example)
+#   - Configure SSL certificates
+#   - Set up external secrets management
+
+version: '3.8'
+
+networks:
+  public:
+    driver: bridge
+  app:
+    driver: bridge
+    internal: true
+  data:
+    driver: bridge
+    internal: true
+  monitoring:
+    driver: bridge
+    internal: true
+
+volumes:
+  postgres_data:
+    driver: local
+  influxdb_data:
+    driver: local
+  redis_data:
+    driver: local
+  nginx_logs:
+    driver: local
+  app_logs:
+    driver: local
+  grafana_data:
+    driver: local
+
+secrets:
+  db_password:
+    external: true
+  redis_password:
+    external: true
+  jwt_secret:
+    external: true
+  ssl_cert:
+    external: true
+  ssl_key:
+    external: true
+
+services:
+  # Nginx - Reverse proxy and SSL termination
+  nginx:
+    image: nginx:1.25-alpine
+    container_name: opencsms-nginx
+    restart: unless-stopped
+    ports:
+      - "80:80"
+      - "443:443"
+      - "8443:8443"  # OCPP WebSocket port
+    volumes:
+      - ./nginx/nginx.conf:/etc/nginx/nginx.conf:ro
+      - ./nginx/conf.d:/etc/nginx/conf.d:ro
+      - nginx_logs:/var/log/nginx
+    secrets:
+      - source: ssl_cert
+        target: /etc/ssl/certs/opencsms.crt
+        mode: 0444
+      - source: ssl_key
+        target: /etc/ssl/private/opencsms.key
+        mode: 0400
+    networks:
+      - public
+      - app
+    depends_on:
+      - app
+    healthcheck:
+      test: ["CMD", "wget", "--quiet", "--tries=1", "--spider", "http://localhost/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
+
+  # Open-CSMS Application
+  app:
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile
+    image: open-csms:${VERSION:-latest}
+    container_name: opencsms-app
+    restart: unless-stopped
+    user: "1000:1000"
+    read_only: true
+    tmpfs:
+      - /tmp
+      - /app/logs
+    cap_drop:
+      - ALL
+    cap_add:
+      - NET_BIND_SERVICE
+    security_opt:
+      - no-new-privileges:true
+      - apparmor:docker-default
+    environment:
+      SPRING_PROFILES_ACTIVE: production
+      DATABASE_URL: jdbc:postgresql://postgres:5432/opencsms
+      DATABASE_USERNAME: opencsms
+      REDIS_URL: redis://redis:6379
+      INFLUXDB_URL: http://influxdb:8086
+      INFLUXDB_ORG: ${INFLUXDB_ORG:-opencsms}
+      INFLUXDB_BUCKET: ${INFLUXDB_BUCKET:-telemetry}
+      OCPI_HUB_MODE: ${OCPI_HUB_MODE:-true}
+      OCPI_COUNTRY_CODE: ${OCPI_COUNTRY_CODE:-FR}
+      OCPI_PARTY_ID: ${OCPI_PARTY_ID:-OCS}
+    secrets:
+      - source: db_password
+        target: /run/secrets/db_password
+      - source: redis_password  
+        target: /run/secrets/redis_password
+      - source: jwt_secret
+        target: /run/secrets/jwt_secret
+    volumes:
+      - app_logs:/app/logs
+    networks:
+      - app
+      - data
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      influxdb:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8080/actuator/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 120s
+
+  # PostgreSQL - Main database
+  postgres:
+    image: postgres:15-alpine
+    container_name: opencsms-postgres
+    restart: unless-stopped
+    user: "999:999"
+    read_only: true
+    tmpfs:
+      - /tmp
+      - /var/run/postgresql
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-opencsms}
+      POSTGRES_USER: ${POSTGRES_USER:-opencsms}
+      POSTGRES_INITDB_ARGS: "--auth-host=scram-sha-256"
+    secrets:
+      - source: db_password
+        target: /run/secrets/postgres_password
+        uid: '999'
+        gid: '999'
+        mode: 0400
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    networks:
+      - data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-opencsms} -d ${POSTGRES_DB:-opencsms}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+
+  # InfluxDB - Time-series database
+  influxdb:
+    image: influxdb:2.7-alpine
+    container_name: opencsms-influxdb
+    restart: unless-stopped
+    environment:
+      INFLUXDB_DB: ${INFLUXDB_BUCKET:-telemetry}
+      INFLUXDB_HTTP_AUTH_ENABLED: "true"
+      INFLUXDB_ADMIN_USER: ${INFLUXDB_ADMIN_USER:-admin}
+      INFLUXDB_ADMIN_PASSWORD_FILE: /run/secrets/influxdb_password
+    volumes:
+      - influxdb_data:/var/lib/influxdb2
+    networks:
+      - data
+    healthcheck:
+      test: ["CMD", "influx", "ping"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
+
+  # Redis - Caching and session storage  
+  redis:
+    image: redis:7-alpine
+    container_name: opencsms-redis
+    restart: unless-stopped
+    user: "999:999"
+    read_only: true
+    tmpfs:
+      - /tmp
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+    command: redis-server --requirepass-file /run/secrets/redis_password --appendonly yes
+    secrets:
+      - source: redis_password
+        target: /run/secrets/redis_password
+        uid: '999'
+        gid: '999'
+        mode: 0400
+    volumes:
+      - redis_data:/data
+    networks:
+      - data
+    healthcheck:
+      test: ["CMD", "redis-cli", "--raw", "incr", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+
+  # Prometheus - Monitoring
+  prometheus:
+    image: prom/prometheus:latest
+    container_name: opencsms-prometheus
+    restart: unless-stopped
+    user: "65534:65534"
+    read_only: true
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+    command:
+      - '--config.file=/etc/prometheus/prometheus.yml'
+      - '--storage.tsdb.path=/prometheus'
+      - '--web.console.libraries=/etc/prometheus/console_libraries'
+      - '--web.console.templates=/etc/prometheus/consoles'
+      - '--web.enable-lifecycle'
+      - '--storage.tsdb.retention.time=30d'
+    volumes:
+      - ./prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - ./prometheus/rules:/etc/prometheus/rules:ro
+    networks:
+      - monitoring
+      - app
+    depends_on:
+      - app
+
+  # Grafana - Dashboards
+  grafana:
+    image: grafana/grafana-oss:latest
+    container_name: opencsms-grafana
+    restart: unless-stopped
+    user: "472:472"
+    read_only: true
+    tmpfs:
+      - /tmp
+      - /var/run
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+    environment:
+      GF_SECURITY_ADMIN_USER: ${GRAFANA_ADMIN_USER:-admin}
+      GF_SECURITY_ADMIN_PASSWORD__FILE: /run/secrets/grafana_password
+      GF_INSTALL_PLUGINS: grafana-clock-panel
+      GF_SECURITY_DISABLE_GRAVATAR: "true"
+      GF_USERS_ALLOW_SIGN_UP: "false"
+    volumes:
+      - grafana_data:/var/lib/grafana
+      - ./grafana/provisioning:/etc/grafana/provisioning:ro
+      - ./grafana/dashboards:/var/lib/grafana/dashboards:ro
+    networks:
+      - monitoring
+    depends_on:
+      - prometheus

@@ -1,0 +1,27 @@
+plugins {
+    id 'java-library'
+}
+
+description = 'Open-CSMS OCPI - OCPI 2.2.1 Hub implementation'
+
+dependencies {
+    api project(':open-csms-service')
+    
+    // Web for OCPI REST endpoints
+    api 'org.springframework.boot:spring-boot-starter-web'
+    api 'org.springframework.boot:spring-boot-starter-webflux'
+    
+    // HTTP clients for partner communication
+    api 'org.springframework.boot:spring-boot-starter-webflux'
+    
+    // Utilities
+    implementation 'org.apache.commons:commons-lang3'
+    
+    // Lombok
+    compileOnly 'org.projectlombok:lombok'
+    annotationProcessor 'org.projectlombok:lombok'
+    
+    // Testing
+    testImplementation 'org.springframework.boot:spring-boot-starter-test'
+    testImplementation 'com.github.tomakehurst:wiremock-jre8:2.35.1'
+}

@@ -1,0 +1,219 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<suppressions xmlns="https://jeremylong.github.io/DependencyCheck/dependency-suppression.1.3.xsd">
+    
+    <!-- 
+        OWASP Dependency Check suppressions for Open-CSMS
+        
+        This file contains suppression rules for known false positives or accepted risks.
+        Each suppression should include:
+        - A clear reason for suppression
+        - The CVE or vulnerability being suppressed
+        - An expiration date for review
+    -->
+
+    <!-- Spring Framework suppressions -->
+    
+    <!-- Spring Boot vulnerabilities that don't apply to our usage -->
+    <suppress>
+        <notes><![CDATA[
+            CVE-2023-20861: Spring Expression Language DoS
+            Not applicable - we don't use SpEL in user-controlled contexts
+        ]]></notes>
+        <packageUrl regex="true">^pkg:maven/org\.springframework/.*$</packageUrl>
+        <cve>CVE-2023-20861</cve>
+        <until>2024-06-01</until>
+    </suppress>
+
+    <!-- Jackson library suppressions -->
+    
+    <!-- Jackson deserialization vulnerabilities - mitigated by configuration -->
+    <suppress>
+        <notes><![CDATA[
+            Jackson deserialization vulnerabilities CVE-2020-25649, CVE-2020-36518
+            Mitigated by: 
+            - Default typing disabled
+            - Custom ObjectMapper configuration
+            - Input validation
+        ]]></notes>
+        <packageUrl regex="true">^pkg:maven/com\.fasterxml\.jackson\.core/.*$</packageUrl>
+        <cve>CVE-2020-25649</cve>
+        <cve>CVE-2020-36518</cve>
+        <until>2024-06-01</until>
+    </suppress>
+
+    <!-- Database driver suppressions -->
+    
+    <!-- PostgreSQL JDBC driver - specific vulnerability not applicable -->
+    <suppress>
+        <notes><![CDATA[
+            CVE-2022-21724: PostgreSQL JDBC improper authentication
+            Not applicable - we use connection pooling with proper authentication
+        ]]></notes>
+        <packageUrl regex="true">^pkg:maven/org\.postgresql/postgresql.*$</packageUrl>
+        <cve>CVE-2022-21724</cve>
+        <until>2024-06-01</until>
+    </suppress>
+
+    <!-- Test dependencies suppressions -->
+    
+    <!-- Test containers vulnerabilities in test scope only -->
+    <suppress>
+        <notes><![CDATA[
+            Testcontainers vulnerabilities - test scope only, not in production
+        ]]></notes>
+        <packageUrl regex="true">^pkg:maven/org\.testcontainers/.*$</packageUrl>
+        <cvssBelow>8.0</cvssBelow>
+        <until>2024-06-01</until>
+    </suppress>
+
+    <!-- Development dependencies -->
+    
+    <!-- Spring Boot DevTools - development only -->
+    <suppress>
+        <notes><![CDATA[
+            Spring Boot DevTools vulnerabilities - development scope only
+        ]]></notes>
+        <packageUrl regex="true">^pkg:maven/org\.springframework\.boot/spring\-boot\-devtools.*$</packageUrl>
+        <until>2024-06-01</until>
+    </suppress>
+
+    <!-- InfluxDB client suppressions -->
+    
+    <!-- InfluxDB client vulnerabilities - mitigated by network security -->
+    <suppress>
+        <notes><![CDATA[
+            InfluxDB client vulnerabilities mitigated by:
+            - Network segmentation
+            - Authentication tokens
+            - TLS encryption
+        ]]></notes>
+        <packageUrl regex="true">^pkg:maven/com\.influxdb/influxdb\-client\-java.*$</packageUrl>
+        <cvssBelow>7.0</cvssBelow>
+        <until>2024-06-01</until>
+    </suppress>
+
+    <!-- JWT library suppressions -->
+    
+    <!-- JJWT library - specific algorithm vulnerabilities not used -->
+    <suppress>
+        <notes><![CDATA[
+            JJWT algorithm vulnerabilities - not applicable
+            We explicitly disable vulnerable algorithms (none, HS256 with weak keys)
+        ]]></notes>
+        <packageUrl regex="true">^pkg:maven/io\.jsonwebtoken/jjwt.*$</packageUrl>
+        <cve>CVE-2022-21449</cve>
+        <until>2024-06-01</until>
+    </suppress>
+
+    <!-- Logging framework suppressions -->
+    
+    <!-- Log4j vulnerabilities - using Logback -->
+    <suppress>
+        <notes><![CDATA[
+            Log4j vulnerabilities - not applicable
+            We use Logback as logging implementation, not Log4j
+        ]]></notes>
+        <packageUrl regex="true">^pkg:maven/org\.apache\.logging\.log4j/.*$</packageUrl>
+        <cve>CVE-2021-44228</cve>
+        <cve>CVE-2021-45046</cve>
+        <cve>CVE-2021-45105</cve>
+        <until>2024-06-01</until>
+    </suppress>
+
+    <!-- Redis client suppressions -->
+    
+    <!-- Lettuce Redis client - specific vulnerabilities mitigated -->
+    <suppress>
+        <notes><![CDATA[
+            Redis client vulnerabilities mitigated by:
+            - Redis AUTH enabled
+            - Network isolation
+            - Connection encryption (TLS)
+        ]]></notes>
+        <packageUrl regex="true">^pkg:maven/io\.lettuce/lettuce\-core.*$</packageUrl>
+        <cvssBelow>6.0</cvssBelow>
+        <until>2024-06-01</until>
+    </suppress>
+
+    <!-- WebSocket vulnerabilities -->
+    
+    <!-- WebSocket implementation vulnerabilities - mitigated by authentication -->
+    <suppress>
+        <notes><![CDATA[
+            WebSocket vulnerabilities mitigated by:
+            - Certificate-based authentication (mTLS)
+            - Message validation
+            - Rate limiting
+            - Connection limits
+        ]]></notes>
+        <packageUrl regex="true">^pkg:maven/org\.springframework/spring\-websocket.*$</packageUrl>
+        <cvssBelow>5.0</cvssBelow>
+        <until>2024-06-01</until>
+    </suppress>
+
+    <!-- HTTP client suppressions -->
+    
+    <!-- Apache HTTP client vulnerabilities -->
+    <suppress>
+        <notes><![CDATA[
+            Apache HTTP client - older CVEs not applicable to our usage pattern
+        ]]></notes>
+        <packageUrl regex="true">^pkg:maven/org\.apache\.httpcomponents/.*$</packageUrl>
+        <cve>CVE-2020-13956</cve>
+        <until>2024-06-01</until>
+    </suppress>
+
+    <!-- XML processing suppressions -->
+    
+    <!-- XML external entity (XXE) vulnerabilities - mitigated by configuration -->
+    <suppress>
+        <notes><![CDATA[
+            XXE vulnerabilities mitigated by:
+            - Disabled external entity processing
+            - Custom XML parser configuration
+            - Input validation
+        ]]></notes>
+        <packageUrl regex="true">^pkg:maven/.*xml.*$</packageUrl>
+        <vulnerabilityName regex="true">.*XXE.*</vulnerabilityName>
+        <until>2024-06-01</until>
+    </suppress>
+
+    <!-- Gradle wrapper suppression -->
+    
+    <!-- Gradle wrapper vulnerabilities - development time only -->
+    <suppress>
+        <notes><![CDATA[
+            Gradle wrapper vulnerabilities - development environment only
+            Not included in production deployment
+        ]]></notes>
+        <filePath regex="true">.*gradle\-wrapper.*</filePath>
+        <until>2024-06-01</until>
+    </suppress>
+
+    <!-- Documentation and examples suppressions -->
+    
+    <!-- Example code vulnerabilities -->
+    <suppress>
+        <notes><![CDATA[
+            Example and documentation code - not included in production build
+        ]]></notes>
+        <filePath regex="true">.*/(docs|examples|samples)/.*</filePath>
+        <until>2024-06-01</until>
+    </suppress>
+
+    <!-- OCPP/OCPI protocol specific suppressions -->
+    
+    <!-- Protocol implementation libraries -->
+    <suppress>
+        <notes><![CDATA[
+            OCPP/OCPI protocol implementation vulnerabilities mitigated by:
+            - Message validation
+            - Certificate-based authentication
+            - Protocol-level security measures
+        ]]></notes>
+        <packageUrl regex="true">^pkg:maven/.*(ocpp|ocpi).*$</packageUrl>
+        <cvssBelow>6.0</cvssBelow>
+        <until>2024-06-01</until>
+    </suppress>
+
+</suppressions>

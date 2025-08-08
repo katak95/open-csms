@@ -1,0 +1,27 @@
+plugins {
+    id 'java-library'
+}
+
+description = 'Open-CSMS OCPP - OCPP 1.6 and 2.0.1 protocol implementation'
+
+dependencies {
+    api project(':open-csms-service')
+    
+    // WebSocket for OCPP
+    api 'org.springframework.boot:spring-boot-starter-websocket'
+    
+    // JSON processing for OCPP messages
+    api 'com.fasterxml.jackson.core:jackson-databind'
+    
+    // Utilities
+    implementation 'org.apache.commons:commons-lang3'
+    
+    // Lombok
+    compileOnly 'org.projectlombok:lombok'
+    annotationProcessor 'org.projectlombok:lombok'
+    
+    // Testing
+    testImplementation 'org.springframework.boot:spring-boot-starter-test'
+    testImplementation 'org.springframework.boot:spring-boot-starter-websocket'
+    testImplementation 'org.awaitility:awaitility'
+}

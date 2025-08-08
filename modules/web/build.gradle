@@ -1,0 +1,34 @@
+plugins {
+    id 'java-library'
+}
+
+description = 'Open-CSMS Web - REST controllers and GraphQL resolvers'
+
+dependencies {
+    api project(':open-csms-service')
+    api project(':open-csms-ocpp')
+    
+    // Spring Web
+    api 'org.springframework.boot:spring-boot-starter-web'
+    api 'org.springframework.boot:spring-boot-starter-webflux'
+    api 'org.springframework.boot:spring-boot-starter-websocket'
+    
+    // GraphQL
+    api 'org.springframework.boot:spring-boot-starter-graphql'
+    
+    // OpenAPI Documentation
+    api 'org.springdoc:springdoc-openapi-starter-webmvc-ui'
+    
+    // Security
+    api 'org.springframework.boot:spring-boot-starter-security'
+    api 'org.springframework.boot:spring-boot-starter-oauth2-client'
+    
+    // Lombok
+    compileOnly 'org.projectlombok:lombok'
+    annotationProcessor 'org.projectlombok:lombok'
+    
+    // Testing
+    testImplementation 'org.springframework.boot:spring-boot-starter-test'
+    testImplementation 'org.springframework.security:spring-security-test'
+    testImplementation 'org.springframework.graphql:spring-graphql-test'
+}

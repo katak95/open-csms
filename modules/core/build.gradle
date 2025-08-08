@@ -1,0 +1,27 @@
+plugins {
+    id 'java-library'
+}
+
+description = 'Open-CSMS Core - Common utilities and base classes'
+
+dependencies {
+    // Spring Framework
+    api 'org.springframework:spring-context'
+    api 'org.springframework:spring-tx'
+    
+    // Validation
+    api 'jakarta.validation:jakarta.validation-api'
+    
+    // JSON Processing
+    api 'com.fasterxml.jackson.core:jackson-databind'
+    api 'com.fasterxml.jackson.datatype:jackson-datatype-jsr310'
+    
+    // Utilities
+    api 'org.apache.commons:commons-lang3'
+    compileOnly 'org.projectlombok:lombok'
+    annotationProcessor 'org.projectlombok:lombok'
+    
+    // Testing
+    testImplementation 'org.springframework.boot:spring-boot-starter-test'
+    testImplementation 'org.mockito:mockito-junit-jupiter'
+}

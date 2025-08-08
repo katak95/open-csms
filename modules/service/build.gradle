@@ -1,0 +1,35 @@
+plugins {
+    id 'java-library'
+}
+
+description = 'Open-CSMS Service - Business logic and service layer'
+
+dependencies {
+    api project(':open-csms-domain')
+    api project(':open-csms-core')
+    
+    // Spring Boot Services
+    api 'org.springframework.boot:spring-boot-starter'
+    api 'org.springframework.boot:spring-boot-starter-cache'
+    
+    // Redis
+    api 'org.springframework.boot:spring-boot-starter-data-redis-reactive'
+    
+    // InfluxDB
+    api 'com.influxdb:influxdb-client-java'
+    
+    // Security
+    api 'org.springframework.boot:spring-boot-starter-security'
+    
+    // Utilities
+    implementation 'com.google.guava:guava'
+    
+    // Lombok
+    compileOnly 'org.projectlombok:lombok'
+    annotationProcessor 'org.projectlombok:lombok'
+    
+    // Testing
+    testImplementation 'org.springframework.boot:spring-boot-starter-test'
+    testImplementation 'org.springframework.security:spring-security-test'
+    testImplementation 'org.testcontainers:postgresql'
+}

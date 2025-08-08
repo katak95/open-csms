@@ -1,0 +1,295 @@
+# Open-CSMS Application Configuration
+# Core configuration for all environments
+
+spring:
+  application:
+    name: open-csms
+    
+  profiles:
+    active: ${SPRING_PROFILES_ACTIVE:development}
+    
+  # JPA Configuration
+  jpa:
+    hibernate:
+      ddl-auto: none  # Use Flyway for schema management
+    show-sql: false
+    properties:
+      hibernate:
+        dialect: org.hibernate.dialect.PostgreSQLDialect
+        format_sql: true
+        jdbc:
+          time_zone: UTC
+        default_schema: public
+    open-in-view: false
+    
+  # Database Configuration
+  datasource:
+    url: ${DATABASE_URL:jdbc:postgresql://localhost:5432/opencsms}
+    username: ${DATABASE_USERNAME:opencsms}
+    password: ${DATABASE_PASSWORD:opencsms}
+    driver-class-name: org.postgresql.Driver
+    hikari:
+      connection-timeout: 20000
+      maximum-pool-size: 20
+      minimum-idle: 5
+      idle-timeout: 300000
+      max-lifetime: 1200000
+      leak-detection-threshold: 60000
+      
+  # Redis Configuration
+  data:
+    redis:
+      url: ${REDIS_URL:redis://localhost:6379}
+      password: ${REDIS_PASSWORD:}
+      timeout: 2000ms
+      lettuce:
+        pool:
+          max-active: 20
+          max-idle: 10
+          min-idle: 5
+          
+  # Flyway Configuration
+  flyway:
+    enabled: true
+    locations: classpath:db/migration
+    baseline-on-migrate: true
+    validate-on-migrate: true
+    
+  # Cache Configuration
+  cache:
+    type: redis
+    redis:
+      time-to-live: 600000  # 10 minutes default TTL
+      
+  # Security Configuration
+  security:
+    oauth2:
+      client:
+        registration:
+          # OAuth2 providers will be configured per environment
+        provider:
+          # OAuth2 provider configs will be configured per environment
+          
+# InfluxDB Configuration
+influxdb:
+  url: ${INFLUXDB_URL:http://localhost:8086}
+  token: ${INFLUXDB_TOKEN:dev-token}
+  org: ${INFLUXDB_ORG:opencsms}
+  bucket: ${INFLUXDB_BUCKET:telemetry}
+  
+# Open-CSMS Specific Configuration
+opencsms:
+  # Multi-tenant configuration
+  multi-tenant:
+    enabled: true
+    default-tenant: system
+    tenant-resolution: header  # header, subdomain, or path
+    
+  # OCPP Configuration
+  ocpp:
+    websocket:
+      enabled: true
+      port: ${OCPP_WEBSOCKET_PORT:8443}
+      path: /ocpp/{stationId}
+      max-connections: 10000
+      heartbeat-interval: 60s
+      message-timeout: 30s
+    security:
+      enabled: ${OCPP_SECURITY_ENABLED:false}
+      require-client-cert: false
+      keystore:
+        path: ${OCPP_TLS_KEYSTORE_PATH:}
+        password: ${OCPP_TLS_KEYSTORE_PASSWORD:}
+        type: PKCS12
+        
+  # OCPI Configuration  
+  ocpi:
+    enabled: true
+    hub-mode: ${OCPI_HUB_MODE:true}
+    version: "2.2.1"
+    country-code: ${OCPI_COUNTRY_CODE:FR}
+    party-id: ${OCPI_PARTY_ID:OCS}
+    endpoints:
+      base-url: ${OCPI_BASE_URL:https://localhost:8443/ocpi/2.2.1}
+      
+  # Security Configuration
+  security:
+    jwt:
+      secret: ${JWT_SECRET:development-secret-key-change-in-production}
+      expiration: 86400  # 24 hours
+      refresh-expiration: 604800  # 7 days
+    encryption:
+      key: ${ENCRYPTION_KEY:development-encryption-key-change-in-production}
+      algorithm: AES-256-GCM
+
+# JWT Configuration for Spring Security
+jwt:
+  secret: ${JWT_SECRET:ZGV2ZWxvcG1lbnQtc2VjcmV0LWtleS1jaGFuZ2UtaW4tcHJvZHVjdGlvbg==}
+  expiration: ${JWT_EXPIRATION:86400}  # 24 hours in seconds
+  refresh-expiration: ${JWT_REFRESH_EXPIRATION:604800}  # 7 days in seconds
+
+# Multi-tenant configuration
+app:
+  multi-tenant:
+    domain-strategy: ${MULTI_TENANT_DOMAIN_STRATEGY:false}
+    default-tenant: ${DEFAULT_TENANT:demo}
+      
+  # Performance Configuration
+  performance:
+    async:
+      core-pool-size: 10
+      max-pool-size: 50
+      queue-capacity: 100
+    
+# Management & Monitoring
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,metrics,prometheus
+  endpoint:
+    health:
+      show-details: when-authorized
+      probes:
+        enabled: true
+  metrics:
+    export:
+      prometheus:
+        enabled: true
+  info:
+    env:
+      enabled: true
+    java:
+      enabled: true
+    os:
+      enabled: true
+      
+# Logging Configuration
+logging:
+  level:
+    com.opencsms: INFO
+    org.springframework.security: WARN
+    org.hibernate.SQL: WARN
+    org.hibernate.type.descriptor.sql.BasicBinder: WARN
+  pattern:
+    console: '%d{HH:mm:ss.SSS} [%thread] %-5level [%X{tenantId}] %logger{36} - %msg%n'
+    file: '%d{yyyy-MM-dd HH:mm:ss.SSS} [%thread] %-5level [%X{tenantId}] %logger{36} - %msg%n'
+  file:
+    name: logs/open-csms.log
+    max-size: 100MB
+    max-history: 30
+    
+# Server Configuration
+server:
+  port: ${SERVER_PORT:8080}
+  servlet:
+    context-path: /
+  compression:
+    enabled: true
+  http2:
+    enabled: true
+  error:
+    include-message: always
+    include-binding-errors: always
+    
+# Jackson Configuration
+spring.jackson:
+  default-property-inclusion: NON_NULL
+  serialization:
+    write-dates-as-timestamps: false
+    indent-output: false
+  deserialization:
+    fail-on-unknown-properties: false
+    accept-single-value-as-array: true
+    
+---
+# Development Profile
+spring:
+  config:
+    activate:
+      on-profile: development
+      
+  # Development Database
+  datasource:
+    url: jdbc:postgresql://localhost:5432/opencsms_dev
+    
+  # Development JPA
+  jpa:
+    show-sql: true
+    properties:
+      hibernate:
+        format_sql: true
+        
+  # Development Logging
+  logging:
+    level:
+      com.opencsms: DEBUG
+      org.springframework.web: DEBUG
+      org.hibernate.SQL: DEBUG
+      
+# Development OpenCSMS
+opencsms:
+  ocpp:
+    security:
+      enabled: false  # Disable TLS for development
+      
+---
+# Test Profile  
+spring:
+  config:
+    activate:
+      on-profile: test
+      
+  # Test Database (H2 in-memory)
+  datasource:
+    url: jdbc:h2:mem:testdb;DB_CLOSE_DELAY=-1;DB_CLOSE_ON_EXIT=FALSE
+    driver-class-name: org.h2.Driver
+    username: sa
+    password:
+    
+  jpa:
+    hibernate:
+      ddl-auto: create-drop
+    properties:
+      hibernate:
+        dialect: org.hibernate.dialect.H2Dialect
+        
+  # Test Redis (embedded)
+  data:
+    redis:
+      url: redis://localhost:6379
+      
+# Test Logging
+logging:
+  level:
+    com.opencsms: DEBUG
+    org.springframework: WARN
+    
+---
+# Production Profile
+spring:
+  config:
+    activate:
+      on-profile: production
+      
+  # Production JPA
+  jpa:
+    show-sql: false
+    
+# Production OpenCSMS
+opencsms:
+  ocpp:
+    security:
+      enabled: true
+      require-client-cert: true
+      
+  security:
+    jwt:
+      secret: ${JWT_SECRET}  # Must be provided via environment
+      
+# Production Logging  
+logging:
+  level:
+    com.opencsms: INFO
+    org.springframework: WARN
+    root: WARN

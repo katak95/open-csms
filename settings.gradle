@@ -1,0 +1,41 @@
+pluginManagement {
+    repositories {
+        gradlePluginPortal()
+        maven { url 'https://repo.spring.io/milestone' }
+        maven { url 'https://repo.spring.io/snapshot' }
+    }
+}
+
+dependencyResolutionManagement {
+    repositories {
+        mavenCentral()
+        maven { url 'https://repo.spring.io/milestone' }
+        maven { url 'https://repo.spring.io/snapshot' }
+    }
+}
+
+rootProject.name = 'open-csms'
+
+// Core modules
+include 'open-csms-core'
+include 'open-csms-domain'
+include 'open-csms-service'
+include 'open-csms-web'
+
+// Protocol modules  
+include 'open-csms-ocpp'
+include 'open-csms-ocpi'
+
+// Integration modules
+include 'open-csms-integration'
+include 'open-csms-security'
+
+// Define project directories
+project(':open-csms-core').projectDir = file('modules/core')
+project(':open-csms-domain').projectDir = file('modules/domain') 
+project(':open-csms-service').projectDir = file('modules/service')
+project(':open-csms-web').projectDir = file('modules/web')
+project(':open-csms-ocpp').projectDir = file('modules/ocpp')
+project(':open-csms-ocpi').projectDir = file('modules/ocpi')
+project(':open-csms-integration').projectDir = file('modules/integration')
+project(':open-csms-security').projectDir = file('modules/security')

@@ -1,0 +1,270 @@
+name: Deploy to Environment
+
+on:
+  push:
+    branches: [ main ]
+    tags: [ 'v*' ]
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: 'Environment to deploy to'
+        required: true
+        default: 'staging'
+        type: choice
+        options:
+          - staging
+          - production
+      version:
+        description: 'Version to deploy (leave empty for latest)'
+        required: false
+        type: string
+
+env:
+  REGISTRY: ghcr.io
+  IMAGE_NAME: ${{ github.repository }}
+
+jobs:
+  build-and-push:
+    name: Build and Push Docker Image
+    runs-on: ubuntu-latest
+    if: github.event_name == 'push' || github.event.inputs.environment != ''
+    
+    outputs:
+      image-digest: ${{ steps.build.outputs.digest }}
+      version: ${{ steps.version.outputs.version }}
+    
+    permissions:
+      contents: read
+      packages: write
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Set up JDK 17
+      uses: actions/setup-java@v4
+      with:
+        java-version: '17'
+        distribution: 'temurin'
+
+    - name: Setup Gradle
+      uses: gradle/actions/setup-gradle@v3
+
+    - name: Generate version
+      id: version
+      run: |
+        if [ "${{ github.event.inputs.version }}" != "" ]; then
+          VERSION=${{ github.event.inputs.version }}
+        elif [ "${{ github.ref_type }}" = "tag" ]; then
+          VERSION=${GITHUB_REF#refs/tags/}
+        elif [ "${{ github.ref }}" = "refs/heads/main" ]; then
+          VERSION=$(date +%Y.%m.%d)-${GITHUB_SHA::8}
+        else
+          VERSION=dev-${GITHUB_SHA::8}
+        fi
+        echo "version=$VERSION" >> $GITHUB_OUTPUT
+        echo "VERSION=$VERSION" >> $GITHUB_ENV
+
+    - name: Build application
+      run: ./gradlew build -x test
+      env:
+        VERSION: ${{ env.VERSION }}
+
+    - name: Log in to Container Registry
+      uses: docker/login-action@v3
+      with:
+        registry: ${{ env.REGISTRY }}
+        username: ${{ github.actor }}
+        password: ${{ secrets.GITHUB_TOKEN }}
+
+    - name: Extract metadata
+      id: meta
+      uses: docker/metadata-action@v5
+      with:
+        images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
+        tags: |
+          type=ref,event=branch
+          type=ref,event=pr
+          type=semver,pattern={{version}}
+          type=semver,pattern={{major}}.{{minor}}
+          type=raw,value=${{ env.VERSION }}
+          type=raw,value=latest,enable={{is_default_branch}}
+
+    - name: Build and push Docker image
+      id: build
+      uses: docker/build-push-action@v5
+      with:
+        context: .
+        file: ./docker/Dockerfile
+        push: true
+        tags: ${{ steps.meta.outputs.tags }}
+        labels: ${{ steps.meta.outputs.labels }}
+        build-args: |
+          VERSION=${{ env.VERSION }}
+          BUILD_DATE=${{ github.event.head_commit.timestamp }}
+          VCS_REF=${{ github.sha }}
+
+  deploy-staging:
+    name: Deploy to Staging
+    runs-on: ubuntu-latest
+    needs: build-and-push
+    if: github.ref == 'refs/heads/main' || github.event.inputs.environment == 'staging'
+    environment: staging
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+      
+    - name: Deploy to staging
+      env:
+        STAGING_HOST: ${{ secrets.STAGING_HOST }}
+        STAGING_USER: ${{ secrets.STAGING_USER }}
+        STAGING_SSH_KEY: ${{ secrets.STAGING_SSH_KEY }}
+        VERSION: ${{ needs.build-and-push.outputs.version }}
+      run: |
+        echo "$STAGING_SSH_KEY" > staging_key
+        chmod 600 staging_key
+        
+        # Copy deployment files
+        scp -i staging_key -o StrictHostKeyChecking=no \
+          docker/docker-compose.yml \
+          docker/staging.env \
+          $STAGING_USER@$STAGING_HOST:/opt/open-csms/
+        
+        # Deploy application
+        ssh -i staging_key -o StrictHostKeyChecking=no $STAGING_USER@$STAGING_HOST << EOF
+          cd /opt/open-csms
+          export VERSION=$VERSION
+          docker-compose -f docker-compose.yml pull
+          docker-compose -f docker-compose.yml up -d
+          
+          # Wait for health check
+          timeout 300 bash -c 'until docker-compose -f docker-compose.yml ps | grep healthy; do sleep 5; done'
+          
+          # Run smoke tests
+          curl -f http://localhost/actuator/health || exit 1
+        EOF
+        
+        rm staging_key
+
+    - name: Run integration tests against staging
+      env:
+        STAGING_URL: ${{ secrets.STAGING_URL }}
+      run: |
+        # Wait for deployment to be ready
+        sleep 30
+        
+        # Run integration tests
+        ./gradlew integrationTest -Dtest.target.url=$STAGING_URL
+      if: env.STAGING_URL != ''
+
+  deploy-production:
+    name: Deploy to Production
+    runs-on: ubuntu-latest
+    needs: build-and-push
+    if: startsWith(github.ref, 'refs/tags/v') || github.event.inputs.environment == 'production'
+    environment: production
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+      
+    - name: Deploy to production
+      env:
+        PROD_HOST: ${{ secrets.PROD_HOST }}
+        PROD_USER: ${{ secrets.PROD_USER }}
+        PROD_SSH_KEY: ${{ secrets.PROD_SSH_KEY }}
+        VERSION: ${{ needs.build-and-push.outputs.version }}
+      run: |
+        echo "$PROD_SSH_KEY" > prod_key
+        chmod 600 prod_key
+        
+        # Copy deployment files
+        scp -i prod_key -o StrictHostKeyChecking=no \
+          docker/docker-compose.yml \
+          docker/production.env \
+          $PROD_USER@$PROD_HOST:/opt/open-csms/
+        
+        # Deploy with zero-downtime
+        ssh -i prod_key -o StrictHostKeyChecking=no $PROD_USER@$PROD_HOST << EOF
+          cd /opt/open-csms
+          export VERSION=$VERSION
+          
+          # Pull new images
+          docker-compose -f docker-compose.yml pull
+          
+          # Rolling deployment
+          docker-compose -f docker-compose.yml up -d --scale app=2 --no-recreate
+          sleep 60
+          
+          # Health check new instances
+          timeout 300 bash -c 'until docker-compose -f docker-compose.yml ps | grep -c healthy | grep 2; do sleep 5; done'
+          
+          # Remove old instances
+          docker-compose -f docker-compose.yml up -d --scale app=1
+          
+          # Final health check
+          curl -f https://api.opencsms.io/actuator/health || exit 1
+        EOF
+        
+        rm prod_key
+
+    - name: Run production smoke tests
+      env:
+        PROD_URL: ${{ secrets.PROD_URL }}
+      run: |
+        # Wait for deployment to stabilize
+        sleep 60
+        
+        # Run critical path tests
+        ./gradlew smokeTest -Dtest.target.url=$PROD_URL
+      if: env.PROD_URL != ''
+
+  security-scan-image:
+    name: Security Scan Docker Image
+    runs-on: ubuntu-latest
+    needs: build-and-push
+    if: github.ref == 'refs/heads/main' || startsWith(github.ref, 'refs/tags/v')
+    
+    steps:
+    - name: Run Trivy vulnerability scanner
+      uses: aquasecurity/trivy-action@master
+      with:
+        image-ref: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ needs.build-and-push.outputs.version }}
+        format: 'sarif'
+        output: 'trivy-results.sarif'
+
+    - name: Upload Trivy scan results to GitHub Security tab
+      uses: github/codeql-action/upload-sarif@v2
+      if: always()
+      with:
+        sarif_file: 'trivy-results.sarif'
+
+  notify:
+    name: Notify Deployment Status
+    runs-on: ubuntu-latest
+    needs: [deploy-staging, deploy-production]
+    if: always()
+    
+    steps:
+    - name: Notify success
+      if: needs.deploy-staging.result == 'success' || needs.deploy-production.result == 'success'
+      env:
+        SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
+      run: |
+        ENV="${{ github.event.inputs.environment || (startsWith(github.ref, 'refs/tags/v') && 'production' || 'staging') }}"
+        curl -X POST -H 'Content-type: application/json' \
+        --data "{\"text\":\"✅ Successfully deployed Open-CSMS to $ENV - Version: ${{ needs.build-and-push.outputs.version }}\"}" \
+        $SLACK_WEBHOOK_URL
+      if: env.SLACK_WEBHOOK_URL != ''
+
+    - name: Notify failure
+      if: needs.deploy-staging.result == 'failure' || needs.deploy-production.result == 'failure'
+      env:
+        SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
+      run: |
+        ENV="${{ github.event.inputs.environment || (startsWith(github.ref, 'refs/tags/v') && 'production' || 'staging') }}"
+        curl -X POST -H 'Content-type: application/json' \
+        --data "{\"text\":\"🚨 Failed to deploy Open-CSMS to $ENV - Version: ${{ needs.build-and-push.outputs.version }}\"}" \
+        $SLACK_WEBHOOK_URL
+      if: env.SLACK_WEBHOOK_URL != ''

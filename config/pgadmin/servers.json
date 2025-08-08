@@ -1,0 +1,15 @@
+{
+    "Servers": {
+        "1": {
+            "Name": "Open-CSMS Development",
+            "Group": "Servers",
+            "Host": "postgres",
+            "Port": 5432,
+            "MaintenanceDB": "opencsms_dev",
+            "Username": "opencsms",
+            "Password": "opencsms_dev_password",
+            "SSLMode": "prefer",
+            "Comment": "Open-CSMS Development Database"
+        }
+    }
+}

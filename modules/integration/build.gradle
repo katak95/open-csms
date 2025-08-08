@@ -1,0 +1,26 @@
+plugins {
+    id 'java-library'
+}
+
+description = 'Open-CSMS Integration - External system integrations'
+
+dependencies {
+    api project(':open-csms-service')
+    
+    // HTTP clients
+    api 'org.springframework.boot:spring-boot-starter-webflux'
+    
+    // Message queues (future use)
+    compileOnly 'org.springframework.boot:spring-boot-starter-amqp'
+    
+    // Utilities
+    implementation 'org.apache.commons:commons-lang3'
+    
+    // Lombok
+    compileOnly 'org.projectlombok:lombok'
+    annotationProcessor 'org.projectlombok:lombok'
+    
+    // Testing
+    testImplementation 'org.springframework.boot:spring-boot-starter-test'
+    testImplementation 'com.github.tomakehurst:wiremock-jre8'
+}

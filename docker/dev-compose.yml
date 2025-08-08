@@ -1,0 +1,174 @@
+# Open-CSMS Development Environment
+# Docker Compose for local development with all required services
+#
+# Usage:
+#   docker-compose -f docker/dev-compose.yml up -d
+#   ./gradlew bootRun
+#
+# Services:
+#   - PostgreSQL (main database)
+#   - InfluxDB (telemetry time-series)
+#   - Redis (caching and WebSocket sessions)
+#   - pgAdmin (PostgreSQL administration)
+#   - InfluxDB UI (InfluxDB administration)
+
+version: '3.8'
+
+networks:
+  opencsms-dev:
+    driver: bridge
+
+volumes:
+  postgres_data:
+    driver: local
+  influxdb_data:
+    driver: local
+  redis_data:
+    driver: local
+
+services:
+  # PostgreSQL - Main database
+  postgres:
+    image: postgres:15-alpine
+    container_name: opencsms-postgres-dev
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: opencsms_dev
+      POSTGRES_USER: opencsms
+      POSTGRES_PASSWORD: opencsms_dev_password
+      POSTGRES_INITDB_ARGS: "--auth-host=scram-sha-256"
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ../sql/init-dev.sql:/docker-entrypoint-initdb.d/01-init.sql:ro
+    networks:
+      - opencsms-dev
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U opencsms -d opencsms_dev"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+
+  # InfluxDB - Time-series database for telemetry
+  influxdb:
+    image: influxdb:2.7-alpine
+    container_name: opencsms-influxdb-dev
+    restart: unless-stopped
+    environment:
+      DOCKER_INFLUXDB_INIT_MODE: setup
+      DOCKER_INFLUXDB_INIT_USERNAME: admin
+      DOCKER_INFLUXDB_INIT_PASSWORD: admin_password
+      DOCKER_INFLUXDB_INIT_ORG: opencsms
+      DOCKER_INFLUXDB_INIT_BUCKET: telemetry
+      DOCKER_INFLUXDB_INIT_ADMIN_TOKEN: dev-token-please-change-in-production
+    ports:
+      - "8086:8086"
+    volumes:
+      - influxdb_data:/var/lib/influxdb2
+    networks:
+      - opencsms-dev
+    healthcheck:
+      test: ["CMD", "influx", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+
+  # Redis - Caching and session storage
+  redis:
+    image: redis:7-alpine
+    container_name: opencsms-redis-dev
+    restart: unless-stopped
+    command: redis-server --requirepass redis_dev_password --appendonly yes
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    networks:
+      - opencsms-dev
+    healthcheck:
+      test: ["CMD", "redis-cli", "--raw", "incr", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+
+  # pgAdmin - PostgreSQL administration interface
+  pgadmin:
+    image: dpage/pgadmin4:latest
+    container_name: opencsms-pgadmin-dev
+    restart: unless-stopped
+    environment:
+      PGADMIN_DEFAULT_EMAIL: admin@opencsms.local
+      PGADMIN_DEFAULT_PASSWORD: pgadmin_password
+      PGADMIN_CONFIG_SERVER_MODE: "False"
+      PGADMIN_CONFIG_MASTER_PASSWORD_REQUIRED: "False"
+    ports:
+      - "8080:80"
+    volumes:
+      - ../config/pgadmin/servers.json:/pgadmin4/servers.json:ro
+    networks:
+      - opencsms-dev
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+  # Redis Commander - Redis administration interface
+  redis-commander:
+    image: rediscommander/redis-commander:latest
+    container_name: opencsms-redis-commander-dev
+    restart: unless-stopped
+    environment:
+      REDIS_HOSTS: local:redis:6379:0:redis_dev_password
+      HTTP_USER: admin
+      HTTP_PASSWORD: redis_ui_password
+    ports:
+      - "8081:8081"
+    networks:
+      - opencsms-dev
+    depends_on:
+      redis:
+        condition: service_healthy
+
+  # Monitoring - Prometheus (optional for development)
+  prometheus:
+    image: prom/prometheus:latest
+    container_name: opencsms-prometheus-dev
+    restart: unless-stopped
+    command:
+      - '--config.file=/etc/prometheus/prometheus.yml'
+      - '--storage.tsdb.path=/prometheus'
+      - '--web.console.libraries=/etc/prometheus/console_libraries'
+      - '--web.console.templates=/etc/prometheus/consoles'
+      - '--web.enable-lifecycle'
+    ports:
+      - "9090:9090"
+    volumes:
+      - ../config/prometheus/prometheus-dev.yml:/etc/prometheus/prometheus.yml:ro
+    networks:
+      - opencsms-dev
+    profiles:
+      - monitoring
+
+  # Grafana - Monitoring dashboards (optional for development)
+  grafana:
+    image: grafana/grafana-oss:latest
+    container_name: opencsms-grafana-dev
+    restart: unless-stopped
+    environment:
+      GF_SECURITY_ADMIN_USER: admin
+      GF_SECURITY_ADMIN_PASSWORD: grafana_password
+      GF_INSTALL_PLUGINS: grafana-clock-panel,grafana-simple-json-datasource
+    ports:
+      - "3000:3000"
+    volumes:
+      - ../config/grafana/provisioning:/etc/grafana/provisioning:ro
+      - ../config/grafana/dashboards:/var/lib/grafana/dashboards:ro
+    networks:
+      - opencsms-dev
+    depends_on:
+      - prometheus
+    profiles:
+      - monitoring
