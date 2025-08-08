@@ -2,11 +2,13 @@ package com.opencsms.ocpp.message;
 
 import com.opencsms.ocpp.message.common.OcppErrorCode;
 import com.opencsms.ocpp.session.OcppSession;
+import com.opencsms.service.ocpp.model.ParsedOcppMessage;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 
 import java.time.Instant;
+import java.util.Map;
 import java.util.concurrent.CompletableFuture;
 
 /**
@@ -22,6 +24,9 @@ public class OcppMessageRouter {
     private final com.opencsms.ocpp.service.BootNotificationService bootNotificationService;
     private final com.opencsms.ocpp.service.HeartbeatService heartbeatService;
     private final com.opencsms.ocpp.service.StatusNotificationService statusNotificationService;
+    private final com.opencsms.service.ocpp.StartTransactionService startTransactionService;
+    private final com.opencsms.service.ocpp.StopTransactionService stopTransactionService;
+    private final com.opencsms.service.ocpp.AuthorizeService authorizeService;
 
     /**
      * Route an incoming OCPP message to the appropriate handler.
@@ -196,21 +201,78 @@ public class OcppMessageRouter {
     }
     
     private Object handleStartTransaction(OcppSession session, ParsedOcppMessage message) {
-        log.info("Received StartTransaction from station: {} - Not implemented yet", session.getStationId());
-        // TODO: Implement TransactionService for StartTransaction
-        return new EmptyResponse();
+        log.info("Received StartTransaction from station: {}", session.getStationId());
+        
+        // Create ParsedOcppMessage with session context
+        ParsedOcppMessage contextMessage = ParsedOcppMessage.builder()
+            .messageType(message.getMessageType())
+            .messageId(message.getMessageId())
+            .action(message.getAction())
+            .payload(message.getPayload())
+            .rawMessage(message.getRawMessage())
+            .ocppVersion(message.getOcppVersion())
+            .stationSerial(session.getStationId())
+            .tenantId(session.getTenantId())
+            .build();
+        
+        if ("1.6".equals(message.getOcppVersion())) {
+            return startTransactionService.processStartTransaction16(contextMessage);
+        } else if ("2.0.1".equals(message.getOcppVersion())) {
+            return startTransactionService.processTransactionEventStarted(contextMessage);
+        } else {
+            log.warn("Unsupported OCPP version for StartTransaction: {}", message.getOcppVersion());
+            return createSimpleErrorResponse("NotSupported", "Unsupported OCPP version");
+        }
     }
     
     private Object handleStopTransaction(OcppSession session, ParsedOcppMessage message) {
-        log.info("Received StopTransaction from station: {} - Not implemented yet", session.getStationId());
-        // TODO: Implement TransactionService for StopTransaction
-        return new EmptyResponse();
+        log.info("Received StopTransaction from station: {}", session.getStationId());
+        
+        // Create ParsedOcppMessage with session context
+        ParsedOcppMessage contextMessage = ParsedOcppMessage.builder()
+            .messageType(message.getMessageType())
+            .messageId(message.getMessageId())
+            .action(message.getAction())
+            .payload(message.getPayload())
+            .rawMessage(message.getRawMessage())
+            .ocppVersion(message.getOcppVersion())
+            .stationSerial(session.getStationId())
+            .tenantId(session.getTenantId())
+            .build();
+        
+        if ("1.6".equals(message.getOcppVersion())) {
+            return stopTransactionService.processStopTransaction16(contextMessage);
+        } else if ("2.0.1".equals(message.getOcppVersion())) {
+            return stopTransactionService.processTransactionEventEnded(contextMessage);
+        } else {
+            log.warn("Unsupported OCPP version for StopTransaction: {}", message.getOcppVersion());
+            return createSimpleErrorResponse("NotSupported", "Unsupported OCPP version");
+        }
     }
     
     private Object handleAuthorize(OcppSession session, ParsedOcppMessage message) {
-        log.debug("Received Authorize from station: {} - Not implemented yet", session.getStationId());
-        // TODO: Implement AuthorizationService
-        return new EmptyResponse();
+        log.debug("Received Authorize from station: {}", session.getStationId());
+        
+        // Create ParsedOcppMessage with session context
+        ParsedOcppMessage contextMessage = ParsedOcppMessage.builder()
+            .messageType(message.getMessageType())
+            .messageId(message.getMessageId())
+            .action(message.getAction())
+            .payload(message.getPayload())
+            .rawMessage(message.getRawMessage())
+            .ocppVersion(message.getOcppVersion())
+            .stationSerial(session.getStationId())
+            .tenantId(session.getTenantId())
+            .build();
+        
+        if ("1.6".equals(message.getOcppVersion())) {
+            return authorizeService.processAuthorize16(contextMessage);
+        } else if ("2.0.1".equals(message.getOcppVersion())) {
+            return authorizeService.processAuthorize201(contextMessage);
+        } else {
+            log.warn("Unsupported OCPP version for Authorize: {}", message.getOcppVersion());
+            return createSimpleErrorResponse("NotSupported", "Unsupported OCPP version");
+        }
     }
     
     private Object handleDataTransfer(OcppSession session, ParsedOcppMessage message) {
@@ -252,6 +314,14 @@ public class OcppMessageRouter {
             .build();
         
         return CompletableFuture.completedFuture(response);
+    }
+
+    private Map<String, Object> createSimpleErrorResponse(String errorCode, String description) {
+        return Map.of(
+            "status", "Rejected",
+            "errorCode", errorCode,
+            "errorDescription", description
+        );
     }
 
     /**
